@@ -1,0 +1,12 @@
+[package]
+name = "discord_bot"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+dotenv = "0.15.0"
+reqwest = "0.13.1"
+serenity = { version = "0.12.5", features = ["client", "gateway", "http", "utils", "builder"] }
+tokio = { version = "1", features = ["full"] }
+regex = "1"
+encoding_rs = "0.8"
