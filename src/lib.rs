@@ -25,17 +25,29 @@ impl EventHandler for Handler {
         };
 
         match command.data.name.as_str() {
-            "sendimage" => self.handle_sendimage(&ctx, &command).await,
+            "is_this_kiwi" | "sendimage" => self.handle_sendimage(&ctx, &command).await,
             _ => {}
         }
     }
 
     async fn ready(&self, ctx: Context, _: Ready) {
-        let result = GuildId::new(1373513874497601658)
-            .create_command(
-                &ctx.http,
-                CreateCommand::new("sendimage")
-                    .description("画像を送信するコマンド")
+        // Register the command. If `GUILD_ID` env var is set to a numeric guild id,
+        // register only there. Otherwise register the command in every guild the
+        // bot is cached in (so it's available on all servers the bot has joined).
+        let command_name = "is_this_kiwi";
+
+        let guild_ids: Vec<GuildId> = match std::env::var("GUILD_ID") {
+            Ok(s) => match s.parse::<u64>() {
+                Ok(n) => vec![GuildId::new(n)],
+                Err(_) => ctx.cache.guilds().iter().cloned().collect(),
+            },
+            Err(_) => ctx.cache.guilds().iter().cloned().collect(),
+        };
+
+        for gid in guild_ids {
+            let res = gid
+                .create_command(&ctx.http, CreateCommand::new(command_name)
+                    .description("鳥かフルーツかを判断するコマンド")
                     .add_option(
                         CreateCommandOption::new(
                             CommandOptionType::Attachment,
@@ -44,12 +56,13 @@ impl EventHandler for Handler {
                         )
                         .required(true),
                     ),
-            )
-            .await;
+                )
+                .await;
 
-        match result {
-            Ok(_) => println!("Command registered successfully"),
-            Err(e) => eprintln!("Error registering command: {:?}", e),
+            match res {
+                Ok(_) => println!("Command registered for guild {}", gid),
+                Err(e) => eprintln!("Error registering command for {}: {:?}", gid, e),
+            }
         }
     }
 }
@@ -69,25 +82,33 @@ impl Handler {
             return;
         };
 
+        // ACK quickly so Discord doesn't think the interaction timed out.
+        self.respond(ctx, command, "画像を受け取りました。解析を開始します...".to_string()).await;
+
         if let Err(e) = crate::download_image(&attachment.url, path).await {
             eprintln!("Error downloading image: {:?}", e);
+            // notify channel about failure
+            if let Err(err) = command.channel_id.say(&ctx.http, format!("画像のダウンロードに失敗しました: {:?}", e)).await {
+                eprintln!("Error sending failure message: {:?}", err);
+            }
             return;
         }
 
         let result = match crate::call_python(path) {
             Ok(r) => r,
             Err(e) => {
-                self.respond(ctx, command, format!("Python実行失敗: {:?}", e)).await;
+                // notify channel about python failure
+                if let Err(err) = command.channel_id.say(&ctx.http, format!("Python実行失敗: {:?}", e)).await {
+                    eprintln!("Error sending failure message: {:?}", err);
+                }
                 return;
             }
         };
 
-        self.respond(
-            ctx,
-            command,
-            format!("受け取った画像: {}\n分析結果: {}", attachment.url, result),
-        )
-        .await;
+        // send final result to the channel (can take longer than 3 seconds)
+        if let Err(e) = command.channel_id.say(&ctx.http, format!("受け取った画像: {}\n分析結果: {}", attachment.url, result)).await {
+            eprintln!("Error sending result message: {:?}", e);
+        }
     }
 
     async fn respond(
