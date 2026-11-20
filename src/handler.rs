@@ -18,9 +18,8 @@ impl EventHandler for Handler {
     }
 
     async fn ready(&self, ctx: Context, _: Ready) {
-        // Register the command. If `GUILD_ID` env var is set to a numeric guild id,
-        // register only there. Otherwise register the command in every guild the
-        // bot is cached in (so it's available on all servers the bot has joined).
+        // コマンドの登録先を決める。環境変数 GUILD_ID が数値として設定されていれば
+        // そのギルドのみ、そうでなければ参加済みの全ギルドに登録する。
         let guild_ids: Vec<GuildId> = match std::env::var("GUILD_ID") {
             Ok(s) => match s.parse::<u64>() {
                 Ok(n) => vec![GuildId::new(n)],

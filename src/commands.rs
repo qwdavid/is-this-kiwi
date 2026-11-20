@@ -9,10 +9,10 @@ use serenity::{
 
 use crate::{downloader, python_bridge};
 
-/// Name of the slash command registered with Discord.
+/// Discord に登録するスラッシュコマンド名
 pub const COMMAND_NAME: &str = "is_this_kiwi";
 
-/// Path of the temporary file the attached image is saved to before analysis.
+/// 添付画像を解析前に保存しておく一時ファイルのパス
 const INPUT_IMAGE_PATH: &str = "tmp/input.png";
 
 pub fn create_command() -> CreateCommand {
@@ -37,12 +37,11 @@ pub async fn handle_is_this_kiwi(ctx: &Context, command: &CommandInteraction) {
         return;
     };
 
-    // ACK quickly so Discord doesn't think the interaction timed out.
+    // Discord にタイムアウトとみなされないよう、先に応答を返しておく
     respond(ctx, command, "画像を受け取りました。解析を開始します...").await;
 
     if let Err(e) = downloader::download_image(&attachment.url, INPUT_IMAGE_PATH).await {
         eprintln!("Error downloading image: {:?}", e);
-        // notify channel about failure
         if let Err(err) = command
             .channel_id
             .say(
@@ -59,7 +58,6 @@ pub async fn handle_is_this_kiwi(ctx: &Context, command: &CommandInteraction) {
     let result = match python_bridge::call_python(INPUT_IMAGE_PATH) {
         Ok(r) => r,
         Err(e) => {
-            // notify channel about python failure
             if let Err(err) = command
                 .channel_id
                 .say(&ctx.http, format!("Python実行失敗: {:?}", e))
@@ -71,7 +69,7 @@ pub async fn handle_is_this_kiwi(ctx: &Context, command: &CommandInteraction) {
         }
     };
 
-    // send final result to the channel (can take longer than 3 seconds)
+    // 解析には3秒以上かかる場合があるため、結果はチャンネルへの新規メッセージで送る
     if let Err(e) = command
         .channel_id
         .say(

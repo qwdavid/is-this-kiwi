@@ -1,6 +1,6 @@
 import sys
 import os
-# Reduce TensorFlow log verbosity (0 = all logs, 3 = ERROR only)
+# TensorFlow のログ出力を抑える（0 = 全部、3 = エラーのみ）
 os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '3')
 import tensorflow as tf
 from tensorflow import keras
@@ -55,5 +55,5 @@ if __name__ == "__main__":
     ai = KiwiAI()
     result = ai.run(image_path)
 
-    # Rustが読むのはここ！
+    # 判定結果はこの標準出力を Rust 側が読む
     print(result)

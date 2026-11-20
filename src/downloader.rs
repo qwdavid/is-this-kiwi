@@ -1,5 +1,5 @@
-/// Download the file at `url` and save it to `path`,
-/// creating the parent directory if it does not exist yet.
+/// `url` のファイルをダウンロードして `path` に保存する。
+/// 親ディレクトリがなければ作成する。
 pub async fn download_image(
     url: &str,
     path: &str,
