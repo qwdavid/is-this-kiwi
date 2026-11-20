@@ -1,9 +1,16 @@
-use std::fs::File;
-use std::io::Write;
+/// Download the file at `url` and save it to `path`,
+/// creating the parent directory if it does not exist yet.
+pub async fn download_image(
+    url: &str,
+    path: &str,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    if let Some(parent) = std::path::Path::new(path).parent() {
+        if !parent.as_os_str().is_empty() {
+            tokio::fs::create_dir_all(parent).await?;
+        }
+    }
 
-pub async fn download_image(url: &str, path: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let bytes = reqwest::get(url).await?.bytes().await?;
-    let mut file = File::create(path)?;
-    file.write_all(&bytes)?;
+    tokio::fs::write(path, &bytes).await?;
     Ok(())
 }
