@@ -12,7 +12,8 @@ pub async fn run_app() -> Result<(), Box<dyn Error>> {
     dotenv().ok();
     let token = std::env::var("DISCORD_TOKEN")?;
 
-    let intents = GatewayIntents::empty(); // スラッシュコマンドだけなら基本空でOK
+    // スラッシュコマンドのみを使うので Intent は空でよい
+    let intents = GatewayIntents::empty();
     let mut client = Client::builder(token, intents)
         .event_handler(handler::Handler)
         .await?;
