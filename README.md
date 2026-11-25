@@ -4,7 +4,7 @@ Discordスラッシュコマンド `/is_this_kiwi` で、画像がキーウィ�
 
 ## 仕組み
 
-1. Discordで画像が添付されると、Rust（serenity）が画像を `tmp/input.png` にダウンロードする
+1. Discordで画像が添付されると、Rust（serenity）が画像を `tmp/` にリクエストごとの一意なファイル名（`input-<インタラクションID>-<添付ファイルID>.png`）でダウンロードする。同時リクエストで画像が混ざらないようにするためで、判定後にファイルは削除される
 2. Python（TensorFlow / Keras）の判定モデル（`model/`）を呼び出して分類する
 3. 結果（キーウィ / キウイ）をチャンネルに投稿する
 
@@ -19,7 +19,7 @@ pip install -r python/requirements.txt
 `.env` に Discord のボットトークンを書く:
 
 ```
-DISCORD_TOKEN=<bot token>
+DISCORD_TOKEN=<redacted>
 ```
 
 任意の環境変数:
