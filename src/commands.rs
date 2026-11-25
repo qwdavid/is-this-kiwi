@@ -12,8 +12,15 @@ use crate::{downloader, python_bridge};
 /// Discord に登録するスラッシュコマンド名
 pub const COMMAND_NAME: &str = "is_this_kiwi";
 
-/// 添付画像を解析前に保存しておく一時ファイルのパス
-const INPUT_IMAGE_PATH: &str = "tmp/input.png";
+/// 添付画像を解析前に保存しておく一時ファイルのパスを、リクエストごとに作る。
+///
+/// 以前は全リクエスト共通の固定パス（`tmp/input.png`）だったため、同時に
+/// コマンドが使われると後から来た画像が先の画像を上書きし、別人の画像を
+/// 判定してしまうことがあった。インタラクション ID と添付ファイル ID は
+/// Discord 側で一意に発番されるので、その組み合わせをファイル名に使う。
+fn input_image_path(interaction_id: u64, attachment_id: u64) -> String {
+    format!("tmp/input-{interaction_id}-{attachment_id}.png")
+}
 
 pub fn create_command() -> CreateCommand {
     CreateCommand::new(COMMAND_NAME)
@@ -40,8 +47,13 @@ pub async fn handle_is_this_kiwi(ctx: &Context, command: &CommandInteraction) {
     // Discord にタイムアウトとみなされないよう、先に応答を返しておく
     respond(ctx, command, "画像を受け取りました。解析を開始します...").await;
 
-    if let Err(e) = downloader::download_image(&attachment.url, INPUT_IMAGE_PATH).await {
+    // このリクエスト専用の一時ファイルに保存する（同時リクエストと混ざらない）
+    let input_path = input_image_path(command.id.get(), attachment_id.get());
+
+    if let Err(e) = downloader::download_image(&attachment.url, &input_path).await {
         eprintln!("Error downloading image: {:?}", e);
+        // ダウンロード途中のファイルが残っていれば片付ける
+        let _ = tokio::fs::remove_file(&input_path).await;
         if let Err(err) = command
             .channel_id
             .say(
@@ -55,7 +67,16 @@ pub async fn handle_is_this_kiwi(ctx: &Context, command: &CommandInteraction) {
         return;
     }
 
-    let result = match python_bridge::call_python(INPUT_IMAGE_PATH) {
+    let python_result = python_bridge::call_python(&input_path);
+
+    // 解析が終わったら、成功・失敗どちらでも一時ファイルを片付ける
+    if let Err(e) = tokio::fs::remove_file(&input_path).await {
+        if e.kind() != std::io::ErrorKind::NotFound {
+            eprintln!("Error removing temporary image {}: {:?}", input_path, e);
+        }
+    }
+
+    let result = match python_result {
         Ok(r) => r,
         Err(e) => {
             if let Err(err) = command
@@ -89,5 +110,24 @@ async fn respond(ctx: &Context, command: &CommandInteraction, content: &str) {
 
     if let Err(e) = command.create_response(&ctx.http, response).await {
         eprintln!("Error sending message: {:?}", e);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::input_image_path;
+
+    #[test]
+    fn input_image_path_is_unique_per_request() {
+        // 別リクエスト（別インタラクション / 別添付）ではパスが重ならない
+        assert_ne!(input_image_path(1, 100), input_image_path(2, 100));
+        assert_ne!(input_image_path(1, 100), input_image_path(1, 200));
+        // 同じリクエストでは決定的に同じパスになる
+        assert_eq!(input_image_path(1, 100), input_image_path(1, 100));
+    }
+
+    #[test]
+    fn input_image_path_stays_under_tmp() {
+        assert!(input_image_path(42, 7).starts_with("tmp/input-"));
     }
 }
